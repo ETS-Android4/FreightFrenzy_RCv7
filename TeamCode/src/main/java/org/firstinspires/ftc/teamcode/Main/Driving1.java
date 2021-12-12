@@ -13,16 +13,25 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
+
+//Road Runner Imports - Lucian
+
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.internal.camera.delegating.DelegatingCaptureSequence;
+import org.firstinspires.ftc.teamcode.Autonomie.DetectObject;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.SampleMecanumDrive;
 import org.firstinspires.ftc.teamcode.RoadRunner.util.BNO055IMUUtil;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.DriveConstants;
 
-
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraFactory;
+import org.openftc.easyopencv.OpenCvCameraRotation;
+import org.openftc.easyopencv.OpenCvInternalCamera2;
+import org.openftc.easyopencv.OpenCvPipeline;
+import org.openftc.easyopencv.OpenCvWebcam;
 
 import java.nio.file.attribute.FileOwnerAttributeView;
 import java.util.function.Function;
@@ -31,23 +40,55 @@ import java.util.function.Function;
 
 public class Driving1 extends LinearOpMode {
 
-
+    //Motoare Brat, Slidere, Carusel, Colector
     private DcMotorEx motor_brat;
     private DcMotorEx motor_slider;
     private DcMotorEx motor_carusel;
     private DcMotorEx motor_colector;
 
+    //Valoare Pentru Inversare Orientare Driving
     private int orientation_drive = -1;
     private SampleMecanumDrive mecanum_drive;
+
+    //Variabila Dashboard
     private FtcDashboard dashboard = FtcDashboard.getInstance();
 
     private CRServo holder;
 
+    //Variabila cu clasa de functii
     private functions fx = new functions();
 
-
+    OpenCvWebcam webcam;
+    DetectObject pipe_line = new DetectObject();
+    @Override
     public void runOpMode() throws InterruptedException
     {
+        //Webcam
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        webcam = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "webcam"), cameraMonitorViewId);
+
+        webcam.setPipeline(pipe_line);
+
+        webcam.setMillisecondsPermissionTimeout(2500); // Timeout for obtaining permission is configurable. Set before opening.
+        webcam.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
+        {
+            @Override
+            public void onOpened()
+            {
+                webcam.startStreaming(320, 240, OpenCvCameraRotation.UPRIGHT);
+            }
+
+            @Override
+            public void onError(int errorCode)
+            {
+                /*
+                 * This will be called if the camera could not be opened
+                 */
+            }
+        });
+
+
+
         //Init motor pentru inclinare brat
         motor_brat = hardwareMap.get(DcMotorEx.class, "brat");
 
@@ -65,7 +106,7 @@ public class Driving1 extends LinearOpMode {
         motor_slider.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motor_slider.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        //Init pentru motorul care se ocupa de caruselul cu rate
+        //Init pentru motorul are se cupa de aruselul cu rate
         motor_carusel = hardwareMap.get(DcMotorEx.class, "carusel");
 
         motor_carusel.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -92,16 +133,17 @@ public class Driving1 extends LinearOpMode {
 
         mecanum_drive.setPoseEstimate(new Pose2d(0, 0, 0));
 
+        //Before start
         while (!opModeIsActive() && !isStopRequested())
         {
             telemetry.addData("Apasa pe buton!", "");
             telemetry.update();
-
         }
 
-
+        //Intrare in program
         while (opModeIsActive())
         {
+            //Schimbare orientare robot
             if (gamepad2.x && orientation_drive == -1)
             {
                 orientation_drive = 1;
@@ -113,6 +155,7 @@ public class Driving1 extends LinearOpMode {
                 sleep(fx.button_sleep);
             }
 
+            //Setare driving pe controller
             mecanum_drive.setWeightedDrivePower(
                     new Pose2d(
                             orientation_drive*gamepad2.left_stick_y,
@@ -122,6 +165,7 @@ public class Driving1 extends LinearOpMode {
             );
             mecanum_drive.update();
 
+            //Functiile de baza
             fx.brat(true);
             fx.slider(true);
             fx.carusel();
@@ -129,30 +173,37 @@ public class Driving1 extends LinearOpMode {
             fx.holder_cr(false);
             fx.reset_brat();
 
-
             telemetry.update();
         }
 
     }
 
+
+    //Clasa functii de baza robot
     class functions {
         private int button_sleep = 135;
 
+        //Valoare care retine daca bratul este in reset sau nu
         private boolean resetting_brat = false;
 
+        //Limita de jos si de sus a bratului ca inclinare
         private int upper_limit_brat = -130;
         private int lower_limit_brat = 2300;
+
+        //Valoare care retine daca bratul este destul de extins pentru inclinare si distanta de clear
         private boolean clear_brat = false;
         private int dist_min_ext = 900;
+
         private double put_brat = 0.8;
 
+        //Functia de inclinare
         public void brat(boolean logs) {
             if (poz_slider >= dist_min_ext)
                 clear_brat = true;
             else
                 clear_brat = false;
 
-            if (poz_slider >= 1800)
+            if (poz_slider >= 3000)
                 put_brat = 0.5;
             else
                 put_brat = 0.8;
@@ -173,7 +224,7 @@ public class Driving1 extends LinearOpMode {
             }
         }
 
-
+        //Functia de resetare brat si slider
         public void reset_brat() {
             if (gamepad1.b) {
                 resetting_brat = true;
@@ -202,11 +253,13 @@ public class Driving1 extends LinearOpMode {
 
         }
 
+        //Pozitie si limite slidere de extindere si retragere
         private int poz_slider = 0;
         private int upper_limit_slider = 5350;
-        private int lower_limit_slider = 25;
+        private int lower_limit_slider = 20;
         private double put_slider = 1;
 
+        //Functia pentru motoarele de la slider extindere/retragere
         public void slider(boolean logs) {
             poz_slider = motor_slider.getCurrentPosition()*-1;
 
@@ -227,6 +280,8 @@ public class Driving1 extends LinearOpMode {
 
         }
 
+
+        //Motor carusel si variabila toggle
         private boolean carusel_tgl = false;
         public void carusel() {
 
@@ -242,24 +297,26 @@ public class Driving1 extends LinearOpMode {
 
         }
 
+        //Functie pentru colector
+        private int clear_colector = 200;
         public void colector() {
 
-            if (gamepad2.y && motor_colector.getPower() == 0 && poz_slider <= 100) {
+            if (gamepad2.y && motor_colector.getPower() == 0 && poz_slider <= clear_colector) {
                 motor_colector.setPower(1);
                 sleep(button_sleep);
-            } else if (gamepad2.y && motor_colector.getPower() == 1) {
+            } else if (gamepad2.y && motor_colector.getPower() == 1 || poz_slider >= 500) {
                 motor_colector.setPower(0);
                 sleep(button_sleep);
             }
         }
 
-
+        //Functie pentru servo galetusa si distanta de la care se ridica automat servo-ul
         private int clear_holder = 2950;
         public void holder_cr(boolean logs) {
             if (gamepad1.left_bumper && poz_slider >= clear_holder)
                 holder.setPower(1);
             else if (poz_slider >= clear_holder)
-                holder.setPower(-0.6);
+                holder.setPower(-0.7);
             else
                 holder.setPower(-1);
 

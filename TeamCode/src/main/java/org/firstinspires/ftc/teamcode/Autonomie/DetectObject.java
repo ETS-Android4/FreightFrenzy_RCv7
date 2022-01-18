@@ -78,7 +78,7 @@ public class DetectObject extends OpenCvPipeline {
         return mat;
     }
 
-    public int get_tip_autonomie() {
+    public int gen_tip_autonomie() {
         return tip_autonomie;
     }
 }

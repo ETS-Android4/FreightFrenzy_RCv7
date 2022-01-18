@@ -47,7 +47,7 @@ public class Driving1 extends LinearOpMode {
     private DcMotorEx motor_colector;
 
     //Valoare Pentru Inversare Orientare Driving
-    private int orientation_drive = -1;
+
     private SampleMecanumDrive mecanum_drive;
 
     //Variabila Dashboard
@@ -97,7 +97,6 @@ public class Driving1 extends LinearOpMode {
         motor_brat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motor_brat.setDirection(DcMotorSimple.Direction.REVERSE);
 
-
         //Init pentru motor miscare de extindere si retragere
         motor_slider = hardwareMap.get(DcMotorEx.class, "slider");
 
@@ -140,20 +139,20 @@ public class Driving1 extends LinearOpMode {
             telemetry.update();
         }
 
+
+        boolean last_it_orientation = false;
+        boolean curr_it_orientation = false;
+        boolean tgl_orientation = false;
+        int orientation_drive = -1;
         //Intrare in program
         while (opModeIsActive())
         {
             //Schimbare orientare robot
-            if (gamepad2.x && orientation_drive == -1)
-            {
-                orientation_drive = 1;
-                sleep(fx.button_sleep);
-            }
-            else if (gamepad2.x && orientation_drive == 1)
-            {
-                orientation_drive = -1;
-                sleep(fx.button_sleep);
-            }
+            last_it_orientation = curr_it_orientation;
+            curr_it_orientation = gamepad2.x;
+
+            if (curr_it_orientation && !last_it_orientation)
+                orientation_drive *= -1;
 
             //Setare driving pe controller
             mecanum_drive.setWeightedDrivePower(
@@ -181,14 +180,15 @@ public class Driving1 extends LinearOpMode {
 
     //Clasa functii de baza robot
     class functions {
+        //deprecated
         private int button_sleep = 135;
 
         //Valoare care retine daca bratul este in reset sau nu
         private boolean resetting_brat = false;
 
         //Limita de jos si de sus a bratului ca inclinare
-        private int upper_limit_brat = -130;
-        private int lower_limit_brat = 2300;
+        private final int upper_limit_brat = 1400;
+        private final int lower_limit_brat = -3500;
 
         //Valoare care retine daca bratul este destul de extins pentru inclinare si distanta de clear
         private boolean clear_brat = false;
@@ -203,30 +203,35 @@ public class Driving1 extends LinearOpMode {
             else
                 clear_brat = false;
 
-            if (poz_slider >= 3000)
-                put_brat = 0.5;
+            if (poz_slider >= 4000)
+                put_brat = 0.7;
             else
-                put_brat = 0.8;
+                put_brat = 1;
 
             if (resetting_brat == false) {
-                if (gamepad1.dpad_down && motor_brat.getCurrentPosition() <= lower_limit_brat && clear_brat)
+                if (gamepad1.dpad_down &&  motor_brat.getCurrentPosition()*-1 >= lower_limit_brat && clear_brat)
                     motor_brat.setPower(put_brat);
-                else if (gamepad1.dpad_up && motor_brat.getCurrentPosition() >= upper_limit_brat && clear_brat)
+                else if (gamepad1.dpad_up && motor_brat.getCurrentPosition()*-1 <= upper_limit_brat  && clear_brat)
                     motor_brat.setPower(-put_brat);
                 else
                     motor_brat.setPower(0);
             }
 
             if (logs) {
-                telemetry.addData("Pozitie Curenta Motor Brat: ", motor_brat.getCurrentPosition());
+                telemetry.addData("Pozitie Curenta Motor Brat: ", motor_brat.getCurrentPosition()*-1);
                 telemetry.addData("Putere Teoretica Motor Brat: ", put_brat);
                 telemetry.addData("Putere Practica Motor Brat: ", motor_brat.getPower());
             }
         }
 
         //Functia de resetare brat si slider
+        boolean last_it_reset = false;
+        boolean curr_it_reset = false;
         public void reset_brat() {
-            if (gamepad1.b) {
+            last_it_reset = curr_it_reset;
+            curr_it_reset = gamepad1.b;
+
+            if (curr_it_reset && !last_it_reset) {
                 resetting_brat = true;
                 motor_brat.setTargetPosition(0);
                 motor_slider.setTargetPosition(0);
@@ -239,8 +244,6 @@ public class Driving1 extends LinearOpMode {
 
                 if (motor_slider.isBusy())
                     motor_slider.setPower(1);
-
-                sleep(button_sleep);
             }
 
             if (!motor_slider.isBusy() && !motor_brat.isBusy())
@@ -283,31 +286,39 @@ public class Driving1 extends LinearOpMode {
 
         //Motor carusel si variabila toggle
         private boolean carusel_tgl = false;
+        private boolean carusel_last_it = false;
+        private boolean carusel_curr_it = false;
         public void carusel() {
 
-            if (gamepad1.x && !carusel_tgl) {
+            carusel_last_it = carusel_curr_it;
+            carusel_curr_it = gamepad1.x;
+
+            if (carusel_curr_it && !carusel_last_it)
+                carusel_tgl = !carusel_tgl;
+
+            if (carusel_tgl)
                 motor_carusel.setPower(1);
-                carusel_tgl = true;
-                sleep(button_sleep);
-            } else if (gamepad1.x && carusel_tgl) {
+            else
                 motor_carusel.setPower(0);
-                carusel_tgl = false;
-                sleep(button_sleep);
-            }
 
         }
 
         //Functie pentru colector
         private int clear_colector = 200;
+        boolean last_it_collector = false;
+        boolean curr_it_collector = false;
+        boolean tgl_collector = false;
         public void colector() {
+            last_it_collector = curr_it_collector;
+            curr_it_collector = gamepad2.y;
+            if (curr_it_collector && !last_it_collector)
+                tgl_collector = !tgl_collector;
 
-            if (gamepad2.y && motor_colector.getPower() == 0 && poz_slider <= clear_colector) {
+            if (tgl_collector)
                 motor_colector.setPower(1);
-                sleep(button_sleep);
-            } else if (gamepad2.y && motor_colector.getPower() == 1 || poz_slider >= 500) {
+            else
                 motor_colector.setPower(0);
-                sleep(button_sleep);
-            }
+
         }
 
         //Functie pentru servo galetusa si distanta de la care se ridica automat servo-ul
